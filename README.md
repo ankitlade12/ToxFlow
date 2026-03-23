@@ -462,14 +462,6 @@ ToxFlow/
 | `TOXFLOW_HOST` | No | API server host (default: 0.0.0.0) |
 | `TOXFLOW_PORT` | No | API server port (default: 8000) |
 
-## References
-
-1. Easley, D., Lopez de Prado, M., & O'Hara, M. (2012). "Flow Toxicity and Liquidity in a High-Frequency World." *Review of Financial Studies*, 25(5), 1457-1493.
-
-2. Easley, D., Lopez de Prado, M., & O'Hara, M. (2011). "The Microstructure of the Flash Crash: Flow Toxicity, Liquidity Crashes, and the Probability of Informed Trading." *Journal of Portfolio Management*, 37(2), 118-128.
-
-3. Synthesis Trade API — https://synthesis.trade
-
 ## License
 
 MIT License — see [LICENSE](LICENSE) file for details.
