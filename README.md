@@ -144,14 +144,17 @@ graph TB
     end
 
     subgraph APILayer ["API Layer - FastAPI"]
-        SINGLE["/api/backtest/single\nFull Time-Series Data"]
+        SCAN["/api/scan\nLive Toxicity Radar"]
+        ANALYZE["/api/analyze\nReal-Tape VPIN + Smart Money"]
+        STREAM["WS /api/stream/{id}\nReal-Time VPIN"]
+        SINGLE["/api/backtest/single\nSynthetic Time-Series"]
         MONTE["/api/backtest/monte-carlo\nDistribution Statistics"]
-        HEALTH["/api/health\nHealth Check"]
     end
 
     subgraph CoreEngine ["Core Engine - Python"]
         VPINE["VPIN Engine\nVolume Bucketing + Tick Rule"]
-        WALLET["Wallet Tracker\nSmart Money Clustering"]
+        FLOW["Flow Analyzer\nInformed-Wallet Detection"]
+        WALLET["Wallet Tracker\nCross-Market Accuracy"]
         SIGNAL["Signal Compositor\nComposite Strength Calculation"]
         STRAT["Strategy Engine\nEntry/Exit + Position Sizing"]
     end
@@ -159,7 +162,7 @@ graph TB
     subgraph DataLayer ["Data Layer - Synthesis API"]
         MARKETS["Market Discovery\nGET /polymarket/markets"]
         TRADES["Trade History\nGET /polymarket/market/{id}/trades"]
-        PRICES["Live Prices\nPOST /markets/prices"]
+        WS["Trades WebSocket\nwss://.../trades/ws"]
         BOOKS["Orderbooks\nPOST /markets/orderbooks"]
     end
 
@@ -169,10 +172,14 @@ graph TB
         METRICS["Performance Metrics\nSharpe, Drawdown, Win Rate"]
     end
 
-    Frontend -->|"REST"| APILayer
+    Frontend -->|"REST + WebSocket"| APILayer
+    SCAN --> CoreEngine
+    ANALYZE --> CoreEngine
+    STREAM --> VPINE
     SINGLE --> CoreEngine
     MONTE --> Backtesting
     CoreEngine --> DataLayer
+    STREAM --> WS
     STRAT --> METRICS
     SYNTH --> WALK
     WALK --> STRAT
@@ -248,14 +255,22 @@ Agreement multiplier:
   VPIN direction opposes market edge  -> 0.3x (reduced confidence)
 ```
 
+#### Flow Analyzer (`core/flow_analyzer.py`)
+
+Live informed-flow detection on a single market's real trade tape — no
+resolution needed (powers `/api/scan` and `/api/analyze`):
+
+- Classifies wallets by **size**, **directional conviction** (|net| / gross volume), and **price leadership** (do their trades precede favorable moves?)
+- Reports informed-volume share, net YES/NO lean, and a wallet leaderboard
+- Flags **divergence** — informed flow taking the opposite side of the retail crowd (the strongest setup)
+
 #### Wallet Tracker (`core/wallet_tracker.py`)
 
-Clusters wallets by historical prediction accuracy:
+Cross-market accuracy clustering for *resolved* markets (offline / backtest
+context where outcomes are known):
 
-- Tracks all wallets across resolved markets
-- Scores accuracy = correct predictions / total trades
-- Smart money threshold: 60%+ accuracy with 10+ trades
-- Weights VPIN contribution: smart money trades get 2-5x multiplier
+- Scores accuracy = correct predictions / total trades across resolved markets
+- Flags "smart money" at 60%+ accuracy with 10+ trades
 
 #### Strategy Engine (`strategies/toxicity_momentum.py`)
 
@@ -268,6 +283,8 @@ Full position management with multiple exit rules:
 | **Time exit** | Position held too long | 600 seconds |
 | **VPIN reversal** | Toxicity drops 50% below entry | Dynamic |
 | **Position sizing** | Signal strength scaled | 3-8% of capital |
+| **Tradeable band** | Skip near-resolved books (no edge at extremes) | 0.05–0.95 |
+| **Realistic fills** | Stops/targets fill at their level, not gapped prints | — |
 
 #### Synthesis Integration (`data/synthesis_client.py`)
 
@@ -472,15 +489,17 @@ ToxFlow/
 | **Mean Sharpe** | Average risk-adjusted performance |
 | **Mean Drawdown** | Average worst-case decline |
 
-### Live Analysis Output
+### Live Radar & Analysis Output
 
 | Metric | Description |
 |--------|-------------|
-| **VPIN Readings** | Number of volume-synchronized measurements |
+| **Toxicity Score** | Radar ranking: VPIN adjusted for sample size, spike density, and price extremity |
+| **VPIN / D-VPIN** | Current toxicity level (0-1) and directional bias (-1 to +1) |
+| **VPIN Momentum** | Whether toxicity is rising or fading vs. its recent average |
 | **Spikes Detected** | Statistically significant toxicity events |
-| **Trade Signals** | Composite signals exceeding threshold |
-| **Latest VPIN** | Current toxicity level (0-1) |
-| **Latest D-VPIN** | Current directional bias (-1 to +1) |
+| **Informed Volume %** | Share of volume from wallets classified as informed |
+| **Flow Bias / Divergence** | Net YES/NO lean of informed flow, and whether it diverges from retail |
+| **Smart-Money Leaderboard** | Top informed wallets by volume, conviction, and price leadership |
 
 ## Tech Stack
 

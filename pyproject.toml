@@ -1,7 +1,7 @@
 [project]
 name = "toxflow"
-version = "0.1.0"
-description = "Polymarket orderflow toxicity engine using VPIN + Synthesis AI forecasts"
+version = "0.2.0"
+description = "Polymarket orderflow toxicity engine: live VPIN radar + smart-money flow on real trades"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
