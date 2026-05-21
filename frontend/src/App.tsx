@@ -8,13 +8,20 @@ import PnlChart from "./components/PnlChart";
 import SignalHeatmap from "./components/SignalHeatmap";
 import MonteCarloChart from "./components/MonteCarloChart";
 import TradeTable from "./components/TradeTable";
-import { Activity } from "lucide-react";
+import DecisionBrief from "./components/DecisionBrief";
+import OpportunityRadar from "./components/OpportunityRadar";
+import LiveView from "./components/LiveView";
+import { Activity, Radar } from "lucide-react";
 import "./index.css";
 
-type Tab = "single" | "montecarlo";
+type Tab = "live" | "single" | "montecarlo";
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("single");
+  const [tab, setTab] = useState<Tab>("live");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [singleResult, setSingleResult] =
@@ -28,8 +35,8 @@ export default function App() {
       const result = await runSingleBacktest(params);
       setSingleResult(result);
       setTab("single");
-    } catch (e: any) {
-      setError(e.message || "Failed to run backtest");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to run backtest"));
     } finally {
       setLoading(false);
     }
@@ -44,8 +51,8 @@ export default function App() {
       const result = await runMonteCarlo(params);
       setMcResult(result);
       setTab("montecarlo");
-    } catch (e: any) {
-      setError(e.message || "Failed to run Monte Carlo");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to run Monte Carlo"));
     } finally {
       setLoading(false);
     }
@@ -68,6 +75,17 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-1">
+            <button
+              onClick={() => setTab("live")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                tab === "live"
+                  ? "bg-gray-700 text-white"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              <Radar className="h-3.5 w-3.5" />
+              Live Radar
+            </button>
             <button
               onClick={() => setTab("single")}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
@@ -94,6 +112,10 @@ export default function App() {
 
       {/* Main Content */}
       <main className="max-w-[1400px] mx-auto px-6 py-6 space-y-4">
+        {tab === "live" ? (
+          <LiveView />
+        ) : (
+          <>
         <ConfigPanel
           onRunSingle={handleRunSingle}
           onRunMonteCarlo={handleRunMonteCarlo}
@@ -127,6 +149,8 @@ export default function App() {
               outcome={singleResult.outcome}
             />
 
+            <DecisionBrief result={singleResult} />
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <VPINChart
                 vpinSeries={singleResult.vpinSeries}
@@ -135,7 +159,13 @@ export default function App() {
               <PnlChart pnlCurve={singleResult.pnlCurve} />
             </div>
 
-            <SignalHeatmap signals={singleResult.signals} />
+            <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-4">
+              <SignalHeatmap signals={singleResult.signals} />
+              <OpportunityRadar
+                opportunities={singleResult.opportunities}
+                axisTimes={singleResult.signals.map((s) => s.time)}
+              />
+            </div>
             <TradeTable trades={singleResult.pnlCurve} />
           </div>
         )}
@@ -159,6 +189,8 @@ export default function App() {
               </p>
             </div>
           </div>
+        )}
+          </>
         )}
       </main>
     </div>

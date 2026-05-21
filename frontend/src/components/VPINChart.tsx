@@ -10,6 +10,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import type { VPINPoint, PricePoint } from "../lib/types";
+import { makeTimeFormatter } from "../lib/format";
 
 interface Props {
   vpinSeries: VPINPoint[];
@@ -49,10 +50,7 @@ export default function VPINChart({ vpinSeries, priceSeries }: Props) {
     };
   });
 
-  const formatTime = (t: number) => {
-    const d = new Date(t * 1000);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
+  const formatTime = makeTimeFormatter(data.map((d) => d.time));
 
   return (
     <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4">
@@ -102,8 +100,8 @@ export default function VPINChart({ vpinSeries, priceSeries }: Props) {
               borderRadius: "8px",
               fontSize: 12,
             }}
-            labelFormatter={(t: any) => formatTime(t)}
-            formatter={(value: any, name: any) => [
+            labelFormatter={(t: unknown) => formatTime(Number(t))}
+            formatter={(value: unknown, name: unknown) => [
               Number(value).toFixed(4),
               name === "vpin"
                 ? "VPIN"

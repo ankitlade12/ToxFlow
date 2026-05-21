@@ -9,6 +9,7 @@ import {
   Cell,
 } from "recharts";
 import type { SignalPoint } from "../lib/types";
+import { makeTimeFormatter } from "../lib/format";
 
 interface Props {
   signals: SignalPoint[];
@@ -18,10 +19,7 @@ export default function SignalHeatmap({ signals }: Props) {
   const tradeSignals = signals.filter((s) => s.shouldTrade);
   const noTradeSignals = signals.filter((s) => !s.shouldTrade);
 
-  const formatTime = (t: number) => {
-    const d = new Date(t * 1000);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
+  const formatTime = makeTimeFormatter(signals.map((s) => s.time));
 
   const getColor = (strength: number, shouldTrade: boolean) => {
     if (!shouldTrade) return "#4b5563";
@@ -37,10 +35,8 @@ export default function SignalHeatmap({ signals }: Props) {
         Signal Heatmap
       </h3>
       <p className="text-xs text-gray-500 mb-3">
-        Y = signal strength, color = intensity.{" "}
-        <span className="text-emerald-400">Green</span> = moderate,{" "}
-        <span className="text-amber-400">Yellow</span> = strong,{" "}
-        <span className="text-red-400">Red</span> = extreme
+        {tradeSignals.length} tradeable signals, {noTradeSignals.length} blocked by
+        gates
       </p>
       <ResponsiveContainer width="100%" height={240}>
         <ScatterChart>
@@ -73,12 +69,12 @@ export default function SignalHeatmap({ signals }: Props) {
               borderRadius: "8px",
               fontSize: 12,
             }}
-            labelFormatter={(t: any) => formatTime(t)}
-            formatter={(value: any, name: any) => {
+            labelFormatter={(t: unknown) => formatTime(Number(t))}
+            formatter={(value: unknown, name: unknown) => {
               const v = Number(value);
               if (name === "strength") return [v.toFixed(3), "Strength"];
               if (name === "direction") return [v.toFixed(3), "Direction"];
-              return [value, name];
+              return [String(value), String(name)];
             }}
           />
           <Scatter data={noTradeSignals} opacity={0.2}>

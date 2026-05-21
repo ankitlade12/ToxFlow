@@ -9,16 +9,14 @@ import {
   ReferenceLine,
 } from "recharts";
 import type { PnlPoint } from "../lib/types";
+import { makeTimeFormatter } from "../lib/format";
 
 interface Props {
   pnlCurve: PnlPoint[];
 }
 
 export default function PnlChart({ pnlCurve }: Props) {
-  const formatTime = (t: number) => {
-    const d = new Date(t * 1000);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
+  const formatTime = makeTimeFormatter(pnlCurve.map((p) => p.time));
 
   const data = pnlCurve.map((p) => ({
     ...p,
@@ -51,12 +49,12 @@ export default function PnlChart({ pnlCurve }: Props) {
               borderRadius: "8px",
               fontSize: 12,
             }}
-            labelFormatter={(t: any) => formatTime(t)}
-            formatter={(value: any, name: any) => {
+            labelFormatter={(t: unknown) => formatTime(Number(t))}
+            formatter={(value: unknown, name: unknown) => {
               const v = Number(value);
               if (name === "pnl") return [`$${v.toFixed(2)}`, "Cumulative P&L"];
               if (name === "tradePnl") return [`$${v.toFixed(2)}`, "Trade P&L"];
-              return [value, name];
+              return [String(value), String(name)];
             }}
           />
           <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="3 3" />

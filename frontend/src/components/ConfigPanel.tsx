@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play, BarChart3, Loader2 } from "lucide-react";
+import { Play, BarChart3, Loader2, SlidersHorizontal } from "lucide-react";
 
 interface Props {
   onRunSingle: (params: ConfigParams) => void;
@@ -26,6 +26,32 @@ export default function ConfigPanel({ onRunSingle, onRunMonteCarlo, loading }: P
   const [seed, setSeed] = useState(42);
   const [useSynthesis, setUseSynthesis] = useState(true);
   const [simulations, setSimulations] = useState(100);
+  const [preset, setPreset] = useState("Balanced");
+
+  const applyPreset = (nextPreset: string) => {
+    setPreset(nextPreset);
+    if (nextPreset === "Conservative") {
+      setBucketVolume(150);
+      setVpinWindow(40);
+      setZThreshold(0.8);
+      setUseSynthesis(true);
+    } else if (nextPreset === "Aggressive") {
+      setBucketVolume(75);
+      setVpinWindow(20);
+      setZThreshold(0.35);
+      setUseSynthesis(true);
+    } else {
+      setBucketVolume(100);
+      setVpinWindow(30);
+      setZThreshold(0.5);
+      setUseSynthesis(true);
+    }
+  };
+
+  const updateNumber = (setter: (value: number) => void) => (value: number) => {
+    setPreset("Custom");
+    setter(value);
+  };
 
   const params: ConfigParams = {
     duration,
@@ -39,22 +65,46 @@ export default function ConfigPanel({ onRunSingle, onRunMonteCarlo, loading }: P
 
   return (
     <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4">
-      <h3 className="text-sm font-medium text-gray-300 mb-4">Parameters</h3>
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
+          <SlidersHorizontal className="h-4 w-4 text-blue-400" />
+          Strategy Controls
+        </div>
+        <div className="flex w-full rounded-lg bg-gray-900/50 p-1 md:w-auto">
+          {["Conservative", "Balanced", "Aggressive"].map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => applyPreset(name)}
+              className={`min-w-0 flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors md:flex-none ${
+                preset === name
+                  ? "bg-gray-700 text-white"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Field label="Duration (s)" value={duration} onChange={setDuration} />
-        <Field label="Bucket Volume ($)" value={bucketVolume} onChange={setBucketVolume} />
-        <Field label="VPIN Window" value={vpinWindow} onChange={setVpinWindow} />
-        <Field label="Z-Threshold" value={zThreshold} onChange={setZThreshold} step={0.1} />
-        <Field label="Capital ($)" value={capital} onChange={setCapital} />
-        <Field label="Seed" value={seed} onChange={setSeed} />
-        <Field label="MC Sims" value={simulations} onChange={setSimulations} />
+        <Field label="Duration (s)" value={duration} onChange={updateNumber(setDuration)} />
+        <Field label="Bucket Volume ($)" value={bucketVolume} onChange={updateNumber(setBucketVolume)} />
+        <Field label="VPIN Window" value={vpinWindow} onChange={updateNumber(setVpinWindow)} />
+        <Field label="Z-Threshold" value={zThreshold} onChange={updateNumber(setZThreshold)} step={0.1} />
+        <Field label="Capital ($)" value={capital} onChange={updateNumber(setCapital)} />
+        <Field label="Seed" value={seed} onChange={updateNumber(setSeed)} />
+        <Field label="MC Sims" value={simulations} onChange={updateNumber(setSimulations)} />
         <div className="flex items-end">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={useSynthesis}
-              onChange={(e) => setUseSynthesis(e.target.checked)}
+              onChange={(e) => {
+                setPreset("Custom");
+                setUseSynthesis(e.target.checked);
+              }}
               className="rounded bg-gray-700 border-gray-600"
             />
             <span className="text-xs text-gray-300">Synthesis AI</span>

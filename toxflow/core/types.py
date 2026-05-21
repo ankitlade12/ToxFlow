@@ -18,7 +18,12 @@ class Outcome(Enum):
 
 @dataclass
 class Trade:
-    """A single trade on Polymarket CLOB."""
+    """A single trade on Polymarket CLOB.
+
+    Binary markets have two ERC-1155 outcome tokens (YES and NO). The raw feed
+    interleaves both; `normalize_trades` re-frames every trade into the YES
+    token's perspective so price is a single coherent series.
+    """
     timestamp: float
     price: float
     size: float  # in USDC notional
@@ -27,6 +32,7 @@ class Trade:
     market_id: str
     maker: Optional[str] = None  # wallet address
     taker: Optional[str] = None
+    token_id: Optional[str] = None  # which outcome token this trade hit
 
 
 @dataclass

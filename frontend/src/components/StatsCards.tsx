@@ -6,11 +6,13 @@ import {
   DollarSign,
   Activity,
   BarChart3,
+  ShieldAlert,
+  Percent,
 } from "lucide-react";
 
 interface Props {
   stats: BacktestStats;
-  outcome: string;
+  outcome?: string;
 }
 
 export default function StatsCards({ stats, outcome }: Props) {
@@ -21,6 +23,13 @@ export default function StatsCards({ stats, outcome }: Props) {
       icon: stats.totalPnl >= 0 ? TrendingUp : TrendingDown,
       color: stats.totalPnl >= 0 ? "text-emerald-400" : "text-red-400",
       bg: stats.totalPnl >= 0 ? "bg-emerald-400/10" : "bg-red-400/10",
+    },
+    {
+      label: "ROI",
+      value: `${(stats.roi * 100).toFixed(2)}%`,
+      icon: Percent,
+      color: stats.roi >= 0 ? "text-emerald-400" : "text-red-400",
+      bg: stats.roi >= 0 ? "bg-emerald-400/10" : "bg-red-400/10",
     },
     {
       label: "Win Rate",
@@ -37,6 +46,13 @@ export default function StatsCards({ stats, outcome }: Props) {
       bg: stats.profitFactor >= 1 ? "bg-emerald-400/10" : "bg-red-400/10",
     },
     {
+      label: "Max Drawdown",
+      value: `${(stats.maxDrawdown * 100).toFixed(1)}%`,
+      icon: ShieldAlert,
+      color: stats.maxDrawdown <= 0.05 ? "text-emerald-400" : "text-amber-400",
+      bg: stats.maxDrawdown <= 0.05 ? "bg-emerald-400/10" : "bg-amber-400/10",
+    },
+    {
       label: "Trades",
       value: stats.numTrades.toString(),
       icon: Activity,
@@ -50,17 +66,21 @@ export default function StatsCards({ stats, outcome }: Props) {
       color: "text-orange-400",
       bg: "bg-orange-400/10",
     },
-    {
-      label: "Outcome",
-      value: outcome.toUpperCase(),
-      icon: Target,
-      color: outcome === "yes" ? "text-emerald-400" : "text-red-400",
-      bg: outcome === "yes" ? "bg-emerald-400/10" : "bg-red-400/10",
-    },
+    ...(outcome
+      ? [
+          {
+            label: "Outcome",
+            value: outcome.toUpperCase(),
+            icon: Target,
+            color: outcome === "yes" ? "text-emerald-400" : "text-red-400",
+            bg: outcome === "yes" ? "bg-emerald-400/10" : "bg-red-400/10",
+          },
+        ]
+      : []),
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
       {cards.map((card) => (
         <div
           key={card.label}

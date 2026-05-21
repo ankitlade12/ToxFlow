@@ -37,6 +37,11 @@ class MarketInfo:
     liquidity: float
     yes_price: float
     no_price: float
+    resolved: bool = False
+    winner_token_id: Optional[str] = None
+    outcome_label: Optional[str] = None  # e.g. "Uzbekistan" for neg-risk events
+    event_id: Optional[int] = None       # parent event (for de-duping sub-markets)
+    event_title: Optional[str] = None
 
 
 class PolymarketClient:
@@ -78,34 +83,44 @@ class PolymarketClient:
 
         markets = []
         for event in data.get("response", []):
+            ev = event.get("event", {})
             for m in event.get("markets", []):
                 try:
-                    outcomes = m.get("outcomes", [])
-                    prices = m.get("prices", [])
-                    yes_price = float(prices[0]) if prices else 0.5
-                    no_price = float(prices[1]) if len(prices) > 1 else 1 - yes_price
+                    # Current Synthesis schema uses left_/right_ outcome fields.
+                    # left is conventionally "Yes"; fall back gracefully.
+                    left_outcome = str(m.get("left_outcome", "Yes")).lower()
+                    left_price = float(m.get("left_price", 0.5) or 0.5)
+                    right_price = float(m.get("right_price", 1 - left_price) or (1 - left_price))
+                    if left_outcome == "yes":
+                        yes_price, no_price = left_price, right_price
+                    else:
+                        yes_price, no_price = right_price, left_price
 
-                    tokens = []
-                    token_ids = m.get("token_ids", [])
-                    for i, outcome in enumerate(outcomes):
-                        tokens.append({
-                            "token_id": token_ids[i] if i < len(token_ids) else "",
-                            "outcome": outcome,
-                        })
+                    tokens = [
+                        {"token_id": m.get("left_token_id", ""), "outcome": m.get("left_outcome", "Yes")},
+                        {"token_id": m.get("right_token_id", ""), "outcome": m.get("right_outcome", "No")},
+                    ]
 
                     info = MarketInfo(
                         condition_id=m.get("condition_id", ""),
-                        question=event.get("event", {}).get("title", m.get("question", "")),
+                        # Prefer the specific market question over the event title
+                        # so neg-risk sub-markets are distinguishable.
+                        question=m.get("question") or ev.get("title", ""),
                         tokens=tokens,
-                        active=not m.get("closed", False),
-                        end_date=m.get("end_date_iso"),
-                        volume=float(m.get("volume", 0)),
-                        liquidity=float(event.get("event", {}).get("liquidity", 0)),
+                        active=bool(m.get("active", True)) and not m.get("resolved", False),
+                        end_date=m.get("ends_at") or ev.get("ends_at"),
+                        volume=float(m.get("volume", 0) or 0),
+                        liquidity=float(m.get("liquidity", 0) or ev.get("liquidity", 0) or 0),
                         yes_price=yes_price,
                         no_price=no_price,
+                        resolved=bool(m.get("resolved", False)),
+                        winner_token_id=m.get("winner_token_id") or None,
+                        outcome_label=m.get("outcome"),
+                        event_id=ev.get("event_id"),
+                        event_title=ev.get("title"),
                     )
                     markets.append(info)
-                except (KeyError, ValueError, IndexError):
+                except (KeyError, ValueError, IndexError, TypeError):
                     continue
 
         return markets
@@ -147,6 +162,7 @@ class PolymarketClient:
                     outcome=Outcome.YES,
                     market_id=condition_id,
                     taker=t.get("address"),
+                    token_id=t.get("token_id"),
                 )
                 trades.append(trade)
             except (KeyError, ValueError, TypeError):
@@ -233,7 +249,7 @@ class PolymarketClient:
         condition_id: str,
         max_trades: int = 10000,
     ) -> list[Trade]:
-        """Paginate through all available trades."""
+        """Paginate through all trades, normalized into the YES-token frame."""
         all_trades: list[Trade] = []
         offset = 0
         page_size = 1000
@@ -249,10 +265,96 @@ class PolymarketClient:
                 break
             offset += page_size
 
-        return sorted(all_trades, key=lambda t: t.timestamp)
+        normalized = normalize_trades(all_trades)
+        return sorted(normalized, key=lambda t: t.timestamp)
 
     async def close(self):
         await self._http.aclose()
+
+
+def parse_raw_trade(raw: dict, condition_id: str) -> Optional[Trade]:
+    """Parse one raw Synthesis trade dict into a Trade (REST or WebSocket)."""
+    try:
+        side = Side.BUY if raw.get("side", True) else Side.SELL
+        price = float(raw.get("price", 0))
+        shares = float(raw.get("shares", 0) or 0)
+        amount = float(raw.get("amount", 0) or 0)
+        size = amount if amount > 0 else shares * price
+        return Trade(
+            timestamp=_parse_timestamp(raw.get("created_at", "")),
+            price=price,
+            size=size,
+            side=side,
+            outcome=Outcome.YES,
+            market_id=condition_id,
+            taker=raw.get("address"),
+            token_id=raw.get("token_id"),
+        )
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
+def normalize_trades(trades: list[Trade]) -> list[Trade]:
+    """Re-frame a mixed-token tape into a single coherent YES-token series.
+
+    A binary market trades two complementary tokens (YES and NO). The raw feed
+    interleaves both, so price flips between p and 1-p and the tape looks
+    nonsensical (e.g. 0.18 then 0.82). We pick the most-traded token as the
+    reference ("YES") and convert every trade on the other token:
+
+        price -> 1 - price          (NO @ 0.82  ==  YES @ 0.18)
+        side  -> flipped            (buying NO  ==  selling YES)
+
+    Prices are clamped to [0.01, 0.99] to drop the occasional bad print that
+    would otherwise distort VPIN and P&L. Trades without a token_id are passed
+    through unchanged (e.g. synthetic data).
+    """
+    if not trades:
+        return trades
+
+    counts: dict[str, int] = {}
+    for t in trades:
+        if t.token_id:
+            counts[t.token_id] = counts.get(t.token_id, 0) + 1
+    if not counts:
+        return trades
+
+    reference = max(counts, key=counts.get)
+    return [normalize_one(t, reference) for t in trades]
+
+
+def majority_token(trades: list[Trade]) -> Optional[str]:
+    """Return the most-traded token_id (the YES-frame reference) or None."""
+    counts: dict[str, int] = {}
+    for t in trades:
+        if t.token_id:
+            counts[t.token_id] = counts.get(t.token_id, 0) + 1
+    return max(counts, key=counts.get) if counts else None
+
+
+def normalize_one(trade: Trade, reference_token: Optional[str]) -> Trade:
+    """Re-frame a single trade into the reference (YES) token's perspective.
+
+    Used by both the batch normalizer and the live WebSocket stream so the
+    in-flight tape stays consistent with the historical one.
+    """
+    price = trade.price
+    side = trade.side
+    if reference_token and trade.token_id and trade.token_id != reference_token:
+        price = 1.0 - trade.price
+        side = Side.SELL if trade.side == Side.BUY else Side.BUY
+    price = min(max(price, 0.01), 0.99)
+    return Trade(
+        timestamp=trade.timestamp,
+        price=price,
+        size=trade.size,
+        side=side,
+        outcome=Outcome.YES,
+        market_id=trade.market_id,
+        maker=trade.maker,
+        taker=trade.taker,
+        token_id=trade.token_id,
+    )
 
 
 def _parse_timestamp(ts_str: str) -> float:

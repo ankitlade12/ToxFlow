@@ -12,13 +12,42 @@
 
 ## Quick Highlights
 
+- **Live Toxicity Radar**: Scans real Polymarket markets and ranks them by *current* orderflow toxicity — open the app and instantly see where informed money is active right now
+- **Real-Time VPIN Streaming**: WebSocket bridge into the Synthesis trade feed computes VPIN tick-by-tick as live executions arrive, with live spike alerts
 - **VPIN Engine**: Volume-Synchronized Probability of Informed Trading adapted for binary outcome markets — first-ever application to prediction markets
 - **Directional VPIN**: Novel extension that reveals *which side* (YES/NO) informed flow favors, not just *that* it's present
-- **Synthesis Overlay**: Real-time Polymarket data via Synthesis API confirms VPIN signals with market intelligence
-- **Composite Signals**: Toxicity + direction + Synthesis edge combined into a single actionable trade signal
-- **Smart Money Tracking**: Wallet clustering identifies historically accurate traders and weights their flow
+- **Smart Money Flow**: Classifies informed wallets on the live tape (size, conviction, price-leadership) and flags when smart money diverges from the retail crowd
+- **Real Data, No Peeking**: Live analysis runs pure VPIN on real trades — no forecast, no outcome knowledge. The synthetic backtest's forecast overlay is clearly labelled *simulated*
+- **Watchlist & Alerts**: Follow markets and get spike / divergence / "turned toxic" alerts as the radar auto-refreshes
 - **Monte Carlo Backtesting**: Statistical confidence via 100+ simulated markets with full performance metrics
-- **Live Dashboard**: React frontend with VPIN charts, P&L curves, signal heatmaps, and trade logs
+- **Live Dashboard**: React frontend with the radar, VPIN charts, P&L curves, smart-money panels, signal heatmaps, and trade logs
+- **Decision Brief**: Operator-facing recommendation, confidence drivers, risk guardrails, and model lift versus VPIN-only baseline
+
+## Final Round Product Layer
+
+ToxFlow now presents the quant engine as a decision-support product, not just a backtest visualizer:
+
+| Product Surface | Value Added |
+|---|---|
+| **Decision Brief** | Converts VPIN, D-VPIN, Synthesis edge, and risk state into a clear Trade/Stage/Watch/Standby recommendation |
+| **Risk Guard** | Shows suggested position size, capital at risk, stop/target bands, max hold, fee drag, and active risk flags |
+| **Opportunity Radar** | Ranks the highest-conviction trade windows with side, signal strength, VPIN, Synthesis edge, size, and rationale |
+| **Market Quality Score** | Summarizes volume, unique wallets, top-wallet concentration, toxicity regime, and VPIN spike count |
+| **Model Lift** | Compares composite VPIN + Synthesis performance against a VPIN-only baseline on the same replay |
+
+## Live Mode (Real Polymarket Data)
+
+The dashboard opens on the **Live Radar** — the engine pointed at real markets, not a simulator.
+
+| Surface | What it does | Endpoint |
+|---|---|---|
+| **Toxicity Radar** | Discovers active Polymarket markets (deduped by event) and ranks them by current VPIN, directional bias, toxicity momentum, spike count, and informed-volume share | `GET /api/scan` |
+| **Market Analysis** | Pulls a market's real trade tape and runs pure VPIN — no forecast, no outcome peeking — plus a *shadow backtest* of the strategy on that real tape | `GET /api/analyze` |
+| **Smart Money Flow** | Classifies informed wallets from observable tape behavior (trade size, directional conviction, price leadership) and flags informed-vs-retail divergence | (in `/api/analyze`) |
+| **Real-Time Stream** | Bridges the Synthesis trades WebSocket into the VPIN engine; warms up on history, then updates VPIN tick-by-tick on each live execution with spike flags | `WS /api/stream/{condition_id}` |
+| **Watchlist & Alerts** | Star markets and receive spike / divergence / "turned toxic" alerts as the radar auto-refreshes (30s) | client-side |
+
+> **Honesty note.** Live mode is forecast-free: signals are computed purely from real orderflow. The classic *Single Backtest* runs on synthetic markets and includes a **simulated** forecast overlay (clearly labelled) to demonstrate the agreement/disagreement logic — it never claims to be a real model. The data layer normalizes Polymarket's two-token (YES/NO) trade feed into a single coherent price series before any analysis.
 
 ## The Problem
 
@@ -267,7 +296,11 @@ Real Polymarket data via Synthesis unified API — no auth required for market d
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/backtest/single` | Run single backtest with full time-series data |
+| `GET` | `/api/scan` | **Live radar** — rank real markets by current VPIN toxicity (deduped by event) |
+| `GET` | `/api/markets` | Discover active Polymarket markets (question, volume, price) for the picker |
+| `GET` | `/api/analyze` | **Live analysis** — pure VPIN + smart-money flow on a real market's trade tape (no forecast) |
+| `WS` | `/api/stream/{condition_id}` | **Real-time** VPIN stream bridged from the Synthesis trades WebSocket |
+| `GET` | `/api/backtest/single` | Run single backtest with full time-series data (synthetic, simulated forecast) |
 | `GET` | `/api/backtest/monte-carlo` | Run Monte Carlo simulation (N markets) |
 | `GET` | `/api/health` | Health check |
 
@@ -322,10 +355,11 @@ Open **http://localhost:3000** (frontend) · API docs at **http://localhost:8000
 
 | Step | Action | What You'll See |
 |------|--------|----------------|
-| **1** | Click **Run Backtest** | VPIN chart overlaid on price, cumulative P&L, signal heatmap, trade log |
-| **2** | Adjust VPIN parameters | Change bucket volume, window size, z-threshold — see how signals change |
-| **3** | Click **Monte Carlo** | P&L distribution across 100 simulated markets with summary statistics |
-| **4** | Run live analysis | `uv run toxflow-live` — VPIN on real Polymarket trades via Synthesis |
+| **1** | Land on **Live Radar**, click **Scan** | Real Polymarket markets ranked by current VPIN toxicity — directional bias, momentum, spikes, informed-volume share |
+| **2** | Click **Analyze** on a market | Real-tape VPIN chart, Smart Money Flow panel, decision brief, and a shadow backtest of the strategy on that market's actual trades |
+| **3** | Click **Go Live** | Real-time VPIN streaming over WebSocket — VPIN ticks as live executions arrive, with spike flags |
+| **4** | Star a market, toggle **Auto** | Watchlist auto-refreshes and fires spike / divergence / "turned toxic" alerts |
+| **5** | Open **Single Backtest** / **Monte Carlo** | Synthetic-market validation with full metrics (forecast overlay labelled *simulated*) |
 
 ### CLI Commands
 
@@ -356,18 +390,20 @@ ToxFlow/
 ├── toxflow/
 │   ├── core/
 │   │   ├── vpin.py                # VPIN engine (volume bucketing + calculation)
-│   │   ├── signal_compositor.py   # Combines VPIN + Synthesis into trade signals
-│   │   ├── wallet_tracker.py      # Smart money wallet clustering
+│   │   ├── signal_compositor.py   # Combines VPIN + forecast into trade signals
+│   │   ├── flow_analyzer.py       # Informed ("smart money") flow on a live tape
+│   │   ├── wallet_tracker.py      # Cross-market wallet accuracy clustering
 │   │   └── types.py               # Shared data types (Trade, VPINReading, etc.)
 │   ├── data/
-│   │   ├── polymarket_client.py   # Polymarket data via Synthesis API
+│   │   ├── polymarket_client.py   # Polymarket data + two-token normalization
 │   │   └── synthesis_client.py    # Synthesis unified API client
 │   ├── strategies/
 │   │   └── toxicity_momentum.py   # Primary strategy: trade VPIN spikes
 │   ├── backtesting/
 │   │   └── engine.py              # Walk-forward + Monte Carlo backtesting
 │   ├── api/
-│   │   └── server.py              # FastAPI endpoints for dashboard
+│   │   ├── server.py              # FastAPI: scan, analyze, markets, backtest
+│   │   └── live_stream.py         # Synthesis trades WebSocket → live trades
 │   ├── scripts/
 │   │   ├── run_backtest.py        # CLI: backtest runner
 │   │   └── run_live.py            # CLI: live market analysis
@@ -375,8 +411,14 @@ ToxFlow/
 │       └── test_vpin.py           # 6 unit tests for VPIN engine
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx                # Main dashboard layout
+│   │   ├── App.tsx                # Dashboard layout (Live Radar / Backtest / MC tabs)
 │   │   ├── components/
+│   │   │   ├── LiveView.tsx        # Live tab: radar + watchlist + alerts + drill-down
+│   │   │   ├── LiveRadar.tsx       # Toxicity-ranked market scanner table
+│   │   │   ├── LiveStreamPanel.tsx # Real-time VPIN stream over WebSocket
+│   │   │   ├── SmartMoneyPanel.tsx # Informed-wallet flow + leaderboard
+│   │   │   ├── DecisionBrief.tsx   # Recommendation + risk guard + model lift
+│   │   │   ├── OpportunityRadar.tsx # Ranked trade windows
 │   │   │   ├── VPINChart.tsx      # VPIN + price overlay chart
 │   │   │   ├── PnlChart.tsx       # Cumulative P&L curve
 │   │   │   ├── SignalHeatmap.tsx   # Signal strength scatter plot
@@ -402,7 +444,7 @@ ToxFlow/
 | 2 | **Directional VPIN** | Standard VPIN only measures magnitude; our extension reveals *which side* smart money is on |
 | 3 | **Composite signal model** | Neither VPIN nor market data alone is reliable; combining them with agreement multipliers filters false positives |
 | 4 | **Volume bucketing for binary markets** | Prediction markets are bursty — volume-synchronized analysis normalizes this naturally |
-| 5 | **Wallet accuracy clustering** | Weights VPIN by historically correct wallets, amplifying true informed flow signal |
+| 5 | **Smart-money flow detection** | Classifies informed wallets on the live tape by size, directional conviction, and price-leadership — then flags when informed flow diverges from the retail crowd |
 | 6 | **Monte Carlo validation** | Statistical confidence across 100+ simulated markets, not just cherry-picked results |
 | 7 | **Real data via Synthesis API** | Live Polymarket trades with wallet addresses — not simulated, not delayed |
 | 8 | **Academically grounded** | Based on Easley, Lopez de Prado & O'Hara (2012) — the paper that detected the Flash Crash |
@@ -450,7 +492,7 @@ ToxFlow/
 | **Frontend** | React 19, TypeScript, Recharts | Interactive charts, parameter tuning, trade visualization |
 | **Styling** | Tailwind CSS v4 | Dark-themed dashboard UI |
 | **Package Management** | uv, Hatchling | Python dependency management and build |
-| **Telephony** | WebSocket (Synthesis) | Real-time trade streaming |
+| **Streaming** | WebSocket (Synthesis trades feed → FastAPI WS) | Real-time trade streaming + live VPIN |
 
 ## Environment Variables
 

@@ -64,7 +64,7 @@ export default function MonteCarloChart({ data }: Props) {
               borderRadius: "8px",
               fontSize: 12,
             }}
-            formatter={(value: any) => [value, "Simulations"]}
+            formatter={(value: unknown) => [String(value), "Simulations"]}
           />
           <ReferenceLine x={bins.findIndex((b) => b.midpoint >= 0)} stroke="#6b7280" strokeDasharray="3 3" />
           <Bar dataKey="count" radius={[2, 2, 0, 0]}>

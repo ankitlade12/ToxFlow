@@ -11,16 +11,18 @@ export default function TradeTable({ trades }: Props) {
         Trade Log ({trades.length} trades)
       </h3>
       <div className="overflow-x-auto max-h-64 overflow-y-auto">
-        <table className="w-full text-xs">
+        <table className="w-full min-w-[760px] text-xs">
           <thead className="sticky top-0 bg-gray-800">
             <tr className="text-gray-400 border-b border-gray-700">
               <th className="text-left py-2 px-2">#</th>
               <th className="text-left py-2 px-2">Side</th>
+              <th className="text-right py-2 px-2">Size</th>
               <th className="text-right py-2 px-2">Entry</th>
               <th className="text-right py-2 px-2">Exit</th>
               <th className="text-right py-2 px-2">P&L</th>
               <th className="text-right py-2 px-2">Signal</th>
               <th className="text-right py-2 px-2">VPIN</th>
+              <th className="text-right py-2 px-2">Edge</th>
             </tr>
           </thead>
           <tbody>
@@ -42,6 +44,9 @@ export default function TradeTable({ trades }: Props) {
                   </span>
                 </td>
                 <td className="py-1.5 px-2 text-right text-gray-300">
+                  ${t.size.toFixed(0)}
+                </td>
+                <td className="py-1.5 px-2 text-right text-gray-300">
                   {t.entryPrice.toFixed(4)}
                 </td>
                 <td className="py-1.5 px-2 text-right text-gray-300">
@@ -59,6 +64,11 @@ export default function TradeTable({ trades }: Props) {
                 </td>
                 <td className="py-1.5 px-2 text-right text-gray-300">
                   {t.vpinAtEntry.toFixed(3)}
+                </td>
+                <td className="py-1.5 px-2 text-right text-gray-300">
+                  {t.synthEdgeAtEntry === null
+                    ? "n/a"
+                    : `${(t.synthEdgeAtEntry * 100).toFixed(1)}%`}
                 </td>
               </tr>
             ))}

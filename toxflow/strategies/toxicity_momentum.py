@@ -64,6 +64,11 @@ class StrategyConfig:
     max_positions: int = 2            # max concurrent positions (concentrated)
     base_size_pct: float = 0.03       # 3% of capital per trade
     max_size_pct: float = 0.08        # 8% max
+
+    # Only trade contested markets. Near-resolved books (pinned in the tails)
+    # have no real edge and make percentage P&L explode on 1-cent moves.
+    min_tradeable_price: float = 0.05
+    max_tradeable_price: float = 0.95
     
     # Fees (Polymarket 2026 dynamic taker fee, maker is 0)
     taker_fee_bps: float = 100        # ~1% effective taker fee
@@ -149,6 +154,12 @@ class ToxicityMomentumStrategy:
         timestamp: float,
     ):
         """Open a new position based on signal."""
+        # Skip near-resolved books: at extreme prices there's no edge to capture
+        # and percentage P&L on a 1-cent move is meaningless.
+        if (current_yes_price <= self.config.min_tradeable_price or
+                current_yes_price >= self.config.max_tradeable_price):
+            return
+
         # Determine entry price
         if signal.recommended_side == Outcome.YES:
             entry_price = current_yes_price
@@ -226,10 +237,20 @@ class ToxicityMomentumStrategy:
                     exit_reason = "vpin_reversal"
             
             if should_exit:
-                self._close_position(pos, current_price, timestamp, exit_reason)
+                # A stop/limit order executes near its trigger price, not at the
+                # next gapped print. Real prediction-market tapes are sparse, so
+                # filling stops/targets at their level (rather than an artifact
+                # gap) is both more realistic and avoids phantom -90% trades.
+                if exit_reason == "stoploss":
+                    fill_price = pos.entry_price * (1.0 - self.config.stop_loss)
+                elif exit_reason == "profit":
+                    fill_price = pos.entry_price * (1.0 + self.config.profit_target)
+                else:
+                    fill_price = current_price
+                self._close_position(pos, fill_price, timestamp, exit_reason)
             else:
                 remaining.append(pos)
-        
+
         self.positions = remaining
 
     def _close_position(
