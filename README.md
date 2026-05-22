@@ -339,7 +339,7 @@ Real Polymarket data via Synthesis unified API — no auth required for market d
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 20.19+ (required by Vite 8 / Tailwind CSS 4)
 - uv (Python package manager)
 
 ### Setup
@@ -352,7 +352,7 @@ cd ToxFlow
 # Install backend dependencies
 uv sync
 
-# Configure credentials (optional — market data works without auth)
+# Optional runtime configuration — market data works without auth
 cp .env.example .env
 ```
 
@@ -365,6 +365,9 @@ uv run toxflow-api
 # Start frontend (separate terminal)
 cd frontend && npm install && npm run dev
 ```
+
+For deployed frontends, set `VITE_API_BASE` to your API URL and set
+`TOXFLOW_CORS_ORIGINS` on the API to the deployed frontend origin.
 
 ### Demo
 
@@ -522,6 +525,8 @@ ToxFlow/
 | `POLYMARKET_API_KEY` | No | Direct Polymarket CLOB access (optional) |
 | `TOXFLOW_HOST` | No | API server host (default: 0.0.0.0) |
 | `TOXFLOW_PORT` | No | API server port (default: 8000) |
+| `TOXFLOW_CORS_ORIGINS` | No | Comma-separated frontend origins allowed by the API |
+| `VITE_API_BASE` | No | Frontend API base URL (default: http://localhost:8000) |
 
 ## License
 

@@ -1,6 +1,7 @@
 """ToxFlow API — serves backtest and live analysis data to the React dashboard."""
 
 import asyncio
+import os
 import time
 from typing import Callable, Optional
 
@@ -27,7 +28,14 @@ app = FastAPI(title="ToxFlow API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "TOXFLOW_CORS_ORIGINS",
+            "http://localhost:5173,http://localhost:3000",
+        ).split(",")
+        if origin.strip()
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -945,7 +953,9 @@ def _build_benchmark(
 
 def main():
     import uvicorn
-    uvicorn.run("toxflow.api.server:app", host="0.0.0.0", port=8000, reload=True)
+    host = os.getenv("TOXFLOW_HOST", "0.0.0.0")
+    port = int(os.getenv("TOXFLOW_PORT", "8000"))
+    uvicorn.run("toxflow.api.server:app", host=host, port=port, reload=True)
 
 
 if __name__ == "__main__":
